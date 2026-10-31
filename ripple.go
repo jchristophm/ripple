@@ -64,6 +64,16 @@ type Options struct {
 	Style func(key string, text string) string
 }
 
+// WrapMode controls visual wrapping without changing document text.
+type WrapMode int
+
+const (
+	// WrapCharacter wraps at the available cell width (the default).
+	WrapCharacter WrapMode = iota
+	// WrapWord prefers whitespace boundaries, falling back to character wrapping.
+	WrapWord
+)
+
 // Model is a multi-line text editor: create one with New, drive it with Update,
 // and render it with View. The zero value is usable (it falls back to the
 // default key bindings) but has no clipboard wired; prefer New.
@@ -74,6 +84,7 @@ type Model struct {
 	width     int
 	height    int
 	viewport  int
+	wrapMode  WrapMode
 	goalCol   int
 
 	undo         []snapshot
@@ -239,6 +250,38 @@ func (m *Model) SetSize(width, height int) {
 	m.width = width
 	m.height = height
 	m.ensureCursorVisible()
+}
+
+// SetWrapMode changes visual wrapping, preserving text, caret and selection.
+func (m *Model) SetWrapMode(mode WrapMode) {
+	if mode != WrapWord {
+		mode = WrapCharacter
+	}
+	if m.wrapMode == mode {
+		return
+	}
+	m.wrapMode = mode
+	m.clamp()
+	m.goalCol = -1
+	m.ensureCursorVisible()
+}
+
+// PlaceCursor moves the caret to a zero-based viewport-relative visual cell,
+// clearing selection. Columns past a line's end land at its end.
+func (m *Model) PlaceCursor(row, col int) {
+	m.clamp()
+	row = max(0, min(row, m.height-1))
+	m.moveTo(m.indexAtVisual(m.viewport+row, col), false)
+	m.goalCol = -1
+	m.ensureCursorVisible()
+}
+
+// ScrollRows scrolls visual rows (positive is down), without changing the caret
+// or selection. Keyboard editing may subsequently restore caret visibility.
+func (m *Model) ScrollRows(delta int) {
+	_, height := m.Size()
+	maxTop := max(0, len(m.visualLines())-height)
+	m.viewport = max(0, min(maxTop, m.viewport+delta))
 }
 
 // SetWidth changes only the visible width, preserving the current height. A
@@ -565,7 +608,7 @@ func (m Model) renderVisualLine(vl visualLine, cursor string, selected, cursorRu
 // focused — mirroring the editor's block-cursor model.
 func (m Model) renderPlaceholder(cursor string, style func(string) string) string {
 	ph := []rune(m.placeholder)
-	lines := appendWrapped(nil, ph, 0, len(ph), max(1, m.width))
+	lines := appendWrapped(nil, ph, 0, len(ph), max(1, m.width), m.wrapMode)
 	out := make([]string, 0, m.height)
 	for row := 0; row < m.height; row++ {
 		if row >= len(lines) {
@@ -801,15 +844,19 @@ func (m Model) visualLines() []visualLine {
 	lineStart := 0
 	for i, r := range m.text {
 		if r == '\n' {
-			lines = appendWrapped(lines, m.text, lineStart, i, width)
+			lines = appendWrapped(lines, m.text, lineStart, i, width, m.wrapMode)
 			lineStart = i + 1
 		}
 	}
-	lines = appendWrapped(lines, m.text, lineStart, len(m.text), width)
+	lines = appendWrapped(lines, m.text, lineStart, len(m.text), width, m.wrapMode)
 	return lines
 }
 
-func appendWrapped(lines []visualLine, text []rune, start, end, width int) []visualLine {
+func appendWrapped(lines []visualLine, text []rune, start, end, width int, mode WrapMode) []visualLine {
+	if mode == WrapWord {
+		return appendWordWrapped(lines, text, start, end, width)
+	}
+
 	if start == end {
 		return append(lines, visualLine{start: start, end: end})
 	}
@@ -827,6 +874,37 @@ func appendWrapped(lines []visualLine, text []rune, start, end, width int) []vis
 	lines = append(lines, visualLine{start: lineStart, end: end})
 	if lineWidth == width {
 		lines = append(lines, visualLine{start: end, end: end})
+	}
+	return lines
+}
+
+// Keep whitespace in the buffer and on visual rows: wrapping never edits text.
+func appendWordWrapped(lines []visualLine, text []rune, start, end, width int) []visualLine {
+	if start == end {
+		return append(lines, visualLine{start, end})
+	}
+	for start < end {
+		i, cells, boundary := start, 0, start
+		for i < end {
+			rw := runeCellWidth(text[i])
+			if cells > 0 && cells+rw > width {
+				break
+			}
+			cells += rw
+			i++
+			if unicode.IsSpace(text[i-1]) {
+				boundary = i
+			}
+		}
+		stop := i
+		if i < end && boundary > start {
+			stop = boundary
+		}
+		lines = append(lines, visualLine{start, stop})
+		start = stop
+		if start == end && cells == width {
+			lines = append(lines, visualLine{end, end})
+		}
 	}
 	return lines
 }

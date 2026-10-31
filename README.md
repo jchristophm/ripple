@@ -172,3 +172,12 @@ selection or cursor layered on top of highlighted text.
 ## License
 
 MIT (see repository).
+
+## Prototype layout APIs
+
+Character wrapping remains the default. `SetWrapMode(WrapWord)` enables visual
+word wrapping, with character fallback for unbroken text. Neither mode edits the
+buffer. `PlaceCursor(row, col)` accepts zero-based viewport-relative visual cells
+and clears selection. `ScrollRows(delta)` scrolls visual rows (positive down),
+clamped to the document, while preserving the caret and selection. Hosts translate
+mouse events into these general-purpose APIs; Ripple does not handle mouse events.
