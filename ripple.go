@@ -276,6 +276,16 @@ func (m *Model) PlaceCursor(row, col int) {
 	m.ensureCursorVisible()
 }
 
+// ExtendSelectionTo extends from the existing anchor (or the current caret)
+// to a zero-based viewport-relative visual cell. It leaves text, clipboard and
+// viewport unchanged; hosts can clamp dragging without automatic scrolling.
+func (m *Model) ExtendSelectionTo(row, col int) {
+	m.clamp()
+	row = max(0, min(row, m.height-1))
+	m.moveTo(m.indexAtVisual(m.viewport+row, col), true)
+	m.goalCol = -1
+}
+
 // ScrollRows scrolls visual rows (positive is down), without changing the caret
 // or selection. Keyboard editing may subsequently restore caret visibility.
 func (m *Model) ScrollRows(delta int) {

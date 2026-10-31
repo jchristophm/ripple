@@ -181,3 +181,8 @@ buffer. `PlaceCursor(row, col)` accepts zero-based viewport-relative visual cell
 and clears selection. `ScrollRows(delta)` scrolls visual rows (positive down),
 clamped to the document, while preserving the caret and selection. Hosts translate
 mouse events into these general-purpose APIs; Ripple does not handle mouse events.
+
+`ExtendSelectionTo(row, col)` extends selection from the existing anchor (or
+the current caret), using the same viewport coordinates as `PlaceCursor`. It
+preserves document text, clipboard contents, and the viewport; hosts own drag
+events and any scrolling policy. A new `PlaceCursor` clears the old selection.
