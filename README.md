@@ -186,3 +186,8 @@ mouse events into these general-purpose APIs; Ripple does not handle mouse event
 the current caret), using the same viewport coordinates as `PlaceCursor`. It
 preserves document text, clipboard contents, and the viewport; hosts own drag
 events and any scrolling policy. A new `PlaceCursor` clears the old selection.
+
+`SelectWordAt(row, col)` selects the complete letter/digit/underscore word at a
+viewport-relative cell, even across a soft wrap. Punctuation selects one rune;
+whitespace, empty rows, and cells beyond a visual line clear selection without
+selecting an adjacent word. Text, clipboard, and viewport are unchanged.

@@ -286,6 +286,34 @@ func (m *Model) ExtendSelectionTo(row, col int) {
 	m.goalCol = -1
 }
 
+// SelectWordAt selects the letters/digits/underscores at a viewport-relative
+// visual cell, including across soft wraps. Punctuation selects one rune;
+// whitespace, empty rows and cells past a visual line clear selection without
+// selecting an adjacent word. Text, clipboard and viewport remain unchanged.
+func (m *Model) SelectWordAt(row, col int) {
+	m.clamp()
+	row = max(0, min(row, m.height-1))
+	lines := m.visualLines()
+	docRow := min(m.viewport+row, len(lines)-1)
+	pos := m.indexAtVisual(m.viewport+row, col)
+	m.moveTo(pos, false)
+	m.goalCol = -1
+	if pos >= lines[docRow].end || pos >= len(m.text) || unicode.IsSpace(m.text[pos]) {
+		return
+	}
+	start, end := pos, pos+1
+	if isWordRune(m.text[pos]) {
+		for start > 0 && isWordRune(m.text[start-1]) {
+			start--
+		}
+		for end < len(m.text) && isWordRune(m.text[end]) {
+			end++
+		}
+	}
+	m.moveTo(start, false)
+	m.moveTo(end, true)
+}
+
 // ScrollRows scrolls visual rows (positive is down), without changing the caret
 // or selection. Keyboard editing may subsequently restore caret visibility.
 func (m *Model) ScrollRows(delta int) {
